@@ -1,0 +1,477 @@
+\documentclass[11pt]{article}
+
+% ============================ packages ============================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{tcolorbox}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\tcbuselibrary{skins,breakable}
+
+% ============================ colours ============================
+\definecolor{accent}{HTML}{1F6FB2}
+\definecolor{accent2}{HTML}{2CA25F}
+\definecolor{warn}{HTML}{C0392B}
+\definecolor{mathc}{HTML}{6C5CE7}
+\definecolor{codebg}{HTML}{F4F6F8}
+\definecolor{asciibg}{HTML}{FBFAF5}
+\definecolor{codekw}{HTML}{8E44AD}
+\definecolor{codestr}{HTML}{27AE60}
+\definecolor{codecom}{HTML}{7F8C8D}
+
+% ============================ code style ============================
+\lstdefinestyle{py}{
+  language=Python, basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg}, keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr}, commentstyle=\color{codecom}\itshape,
+  showstringspaces=false, breaklines=true, frame=single, framerule=0pt,
+  rulecolor=\color{codebg}, xleftmargin=6pt, xrightmargin=6pt, aboveskip=6pt, belowskip=6pt,
+  literate={~}{{$\sim$}}1
+}
+\lstdefinestyle{ascii}{
+  basicstyle=\ttfamily\small, backgroundcolor=\color{asciibg},
+  frame=single, framerule=0pt, rulecolor=\color{asciibg},
+  xleftmargin=6pt, xrightmargin=6pt, aboveskip=6pt, belowskip=6pt, columns=fullflexible
+}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+% ============================ boxes ============================
+\newtcolorbox{plainbox}[1][In plain words]{colback=accent!6,colframe=accent,
+  fonttitle=\bfseries,title=#1,breakable,boxrule=0.6pt,left=4pt,right=4pt,top=3pt,bottom=3pt}
+\newtcolorbox{mathbox}[1][If you want the formula]{colback=mathc!5,colframe=mathc,
+  fonttitle=\bfseries,title=#1,breakable,boxrule=0.5pt,left=4pt,right=4pt,top=3pt,bottom=3pt}
+\newtcolorbox{tipbox}[1][Exam tip]{colback=accent2!7,colframe=accent2,
+  fonttitle=\bfseries,title=#1,breakable,boxrule=0.6pt,left=4pt,right=4pt,top=3pt,bottom=3pt}
+\newtcolorbox{pitbox}[1][Easy to mix up]{colback=warn!6,colframe=warn,
+  fonttitle=\bfseries,title=#1,breakable,boxrule=0.6pt,left=4pt,right=4pt,top=3pt,bottom=3pt}
+\newtcolorbox{churnbox}{colback=black!4,colframe=black!55,
+  fonttitle=\bfseries,title=How this maps to your FictiPay churn project,breakable,
+  boxrule=0.6pt,left=4pt,right=4pt,top=3pt,bottom=3pt}
+
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.6em}{}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+
+% ============================ title ============================
+\title{\vspace{-1.5cm}\textbf{Survival Analysis --- The Friendly Guide}\\[3pt]
+\large Intuition first, formulas optional \\[2pt]
+\normalsize NSUCEC Datathon · Team Cybernauts}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-1.0cm}
+\hrule
+\vspace{6pt}
+
+\begin{plainbox}[How to read this guide]
+Every topic starts with a \textbf{plain-English story} (usually about customers leaving an app, or
+light bulbs burning out). The \textbf{\textcolor{mathc}{purple boxes}} hold the actual formula --- read
+them only if you want the math; you can understand everything without them. The grey boxes connect
+each idea back to the churn project you already built.
+\end{plainbox}
+
+\tableofcontents
+\vspace{6pt}
+\hrule
+
+% =================================================================
+\section{The One Big Idea}
+% =================================================================
+
+Survival analysis answers a single question: \textbf{``how long until something happens?''} --- where
+the ``something'' (called the \textbf{event}) is usually bad: a person dies, a machine breaks, a
+customer churns.
+
+Here is the twist that makes it special. Imagine you switch on \textbf{100 light bulbs} and watch
+them. Some burn out and you write down exactly when. But after 6 months you stop watching, and
+\textbf{30 bulbs are still glowing}. You do \emph{not} know how long those will last --- only that
+it is \emph{more than 6 months}.
+
+The naive move is to throw those 30 away (``incomplete data''). That is a terrible idea ---
+\emph{those are your best bulbs!} Ignoring them makes your product look worse than it really is.
+
+\begin{plainbox}[The whole point of the field]
+Survival analysis is simply \textbf{the correct way to use ``still alive when I stopped watching''
+information.} That half-known data point has a name --- \textbf{censoring} --- and handling it
+properly is the entire reason this toolbox exists.
+\end{plainbox}
+
+\begin{churnbox}
+A customer = a light bulb. Churning = burning out. A customer who is \emph{still active} at your
+April 1 cutoff = \textbf{a bulb still glowing = censored}. You know they ``survived'' (kept
+transacting) at least that long --- you just do not know \emph{when} they will finally quit.
+\end{churnbox}
+
+% =================================================================
+\section{The Two Ways to Look at Survival}
+% =================================================================
+
+There are two questions you can ask about your bulbs (or customers), and they are just two views of
+the \emph{same} story.
+
+\subsection{The survival curve $S(t)$ --- ``what \% are still alive?''}
+Starts at 100\%, only ever goes \emph{down}. At month 3, maybe 80\% are still glowing; at month 6,
+60\%. That downward curve is the \textbf{survival function}. Simple.
+
+\subsection{The hazard $h(t)$ --- ``how dangerous is right now?''}
+This is the subtle one. The hazard is the \textbf{risk rate for the survivors only}: of those still
+alive \emph{at this very moment}, what is the chance they fail in the next instant?
+
+A bulb that has already lasted 5 years might be \emph{more} likely to pop soon --- it is worn out.
+A brand-new customer might be fragile too (never really got hooked). The hazard captures ``how risky
+is \emph{this particular moment}, given you have made it this far.''
+
+\begin{plainbox}[The mental picture]
+Think of the \textbf{hazard} as a \emph{danger meter} ticking moment by moment, and the
+\textbf{survival curve} as the \emph{scoreboard}. The danger meter is what \emph{drives} the
+scoreboard down. High hazard now $\Rightarrow$ the survival curve is about to drop steeply.
+\end{plainbox}
+
+\begin{mathbox}
+Four ways to describe the same thing, all interchangeable:
+$$S(t)=P(T>t)\ \ (\text{still alive}),\qquad h(t)=\frac{f(t)}{S(t)}\ \ (\text{risk rate now}),$$
+$$H(t)=\int_0^t h(u)\,du\ \ (\text{risk piled up so far}),\qquad \boxed{S(t)=e^{-H(t)}}.$$
+That last boxed identity is the bridge: total accumulated danger $H$ determines how many survive.
+\end{mathbox}
+
+\begin{churnbox}
+Your best features --- \code{recency_days}, \code{gap_z}, \code{p_silent30_poisson} --- are
+basically \textbf{hazard readings}. A customer silent for 40 days when they normally transact daily
+has a \emph{sky-high} hazard right now (danger meter pegged). That is exactly why those features
+dominated your model.
+\end{churnbox}
+
+% =================================================================
+\section{Kaplan--Meier: Drawing the Curve from Messy Data}
+% =================================================================
+
+\textbf{Kaplan--Meier (KM)} is just the method for \emph{drawing} that ``\% still alive over time''
+curve when some data is censored. You do not need the formula --- you need the picture.
+
+\begin{lstlisting}[style=ascii]
+ % still alive
+ 100% |#####
+      |    #####            <- flat stretch: nobody churned here
+  80% |        ###             (some may be CENSORED here -- they
+      |           ####          just leave the pool quietly,
+  60% |              ######     they do NOT cause a drop)
+      |                   ###
+  40% |                      ##  <- each STEP DOWN = one real churn
+      +---------------------------> time
+\end{lstlisting}
+
+It is a \textbf{staircase going down}. Every step down = one real event (a churn). Flat stretches =
+nobody churned. The clever part: when someone is \textbf{censored} (still active when you stop
+watching), they do \emph{not} cause a step down --- they just \textbf{quietly leave the pool} so
+they are not counted in later steps. That is how KM honestly uses your ``still-glowing bulbs.''
+
+\begin{plainbox}[Two things people always ask about]
+\textbf{Median survival} = the time where the staircase crosses 50\% (the ``typical'' lifespan). If
+the curve never reaches 50\% (lots of censoring), the median is simply ``not reached'' --- a
+perfectly valid answer. \textbf{Why no drop at a censoring time?} Because a censored person never had
+the event; they only stopped being watched.
+\end{plainbox}
+
+\begin{mathbox}
+At each event time $t_i$: $d_i$ = how many failed, $n_i$ = how many were still at risk just before.
+$$\hat S(t)=\prod_{t_i\le t}\Big(1-\frac{d_i}{n_i}\Big).$$
+Each bracket is ``fraction who survived this instant''; multiply them along the staircase.
+\end{mathbox}
+
+\subsection{Comparing two groups: the log-rank test}
+Say you split customers into \textbf{high-balance vs low-balance}, draw a KM staircase for each, and
+the high-balance one stays higher (they churn less). Is that a \emph{real} difference, or just luck?
+
+\begin{plainbox}
+The \textbf{log-rank test} answers exactly that. It tallies ``how many churned in each group, and
+when'' versus ``what we would expect if the two groups were secretly identical.'' A big mismatch
+$\Rightarrow$ the groups are genuinely different. It gives you a \textbf{yes/no with a confidence
+level (p-value)} --- but \emph{not} ``by how much.'' For ``by how much,'' you need the Cox model
+(next).
+\end{plainbox}
+
+\begin{pitbox}
+Kaplan--Meier and the log-rank test only compare \textbf{groups} (categories). The moment you want
+to handle a continuous number (balance, age, \code{gap_z}) or several factors at once, you must move
+to a \emph{regression} model --- Cox or Weibull.
+\end{pitbox}
+
+% =================================================================
+\section{The Cox Model: Many Factors at Once}
+% =================================================================
+
+KM compares groups. But real customers have \textbf{lots} of traits at the same time --- age,
+balance, region, recency, transaction count. You cannot draw a separate curve for every combination.
+
+The \textbf{Cox proportional hazards model} fixes this. Its whole idea in one sentence:
+
+\begin{plainbox}[The Cox idea]
+\emph{Everyone shares one baseline ``danger-over-time'' shape, and your personal traits
+\textbf{multiply} that baseline up or down.}
+\end{plainbox}
+
+The output for each trait is a \textbf{hazard ratio (HR)} --- the multiplier:
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{HR $=2$} $\Rightarrow$ that trait \emph{doubles} the churn rate (a risk factor).
+  \item \textbf{HR $=0.5$} $\Rightarrow$ \emph{halves} it (protective).
+  \item \textbf{HR $=1$} $\Rightarrow$ no effect.
+\end{itemize}
+
+Example: ``each extra week of silence has HR $=1.4$'' means every quiet week \textbf{multiplies}
+churn risk by $1.4\times$. That is a clean, boardroom-friendly sentence --- far more useful than a
+raw probability.
+
+\begin{mathbox}
+$$h(t\mid \mathbf x)=\underbrace{h_0(t)}_{\text{shared baseline}}\times
+\underbrace{e^{\beta_1 x_1+\dots+\beta_p x_p}}_{\text{your personal multiplier}},
+\qquad \mathrm{HR}_j=e^{\beta_j}.$$
+``Semi-parametric'' = it never has to guess the baseline shape $h_0(t)$; that cancels out in the math.
+\end{mathbox}
+
+\subsection{The one catch: the ``proportional hazards'' assumption}
+\begin{plainbox}
+Cox \textbf{assumes your multiplier stays the same over time}. If silence always multiplies risk by
+$1.4\times$ --- whether the customer is brand new or two years old --- great, Cox is valid. But if a
+trait matters a lot \emph{early} and fades \emph{later}, Cox is wrong and you must check it.
+\end{plainbox}
+
+\textbf{How to check it (know one or two):}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{The parallel-lines test} (log--log plot): transform each group's curve a certain way
+  and look. \textbf{Stay parallel} $\Rightarrow$ assumption holds. \textbf{Cross or fan apart}
+  $\Rightarrow$ broken.
+  \item \textbf{Schoenfeld residuals}: a built-in statistical test (\code{cph.check_assumptions} in
+  \code{lifelines}) that flags any trait whose effect drifts with time.
+\end{itemize}
+
+\textbf{If it is broken:} split that trait into separate baselines (``stratify''), let its effect
+change over time, or switch to a Weibull / random-survival-forest model that does not require the
+assumption.
+
+\begin{tipbox}
+Cox tells you \emph{relative} risk (``$1.4\times$ more likely''), not \emph{when}. If the question is
+``\emph{how many days sooner} will they churn?'', that is the parametric / AFT model's job.
+\end{tipbox}
+
+% =================================================================
+\section{Weibull: Assuming a Shape for the Risk}
+% =================================================================
+
+Cox leaves the baseline danger-meter shape a \emph{mystery} (just traced from the data). A
+\textbf{parametric} model instead \emph{commits} to a known mathematical shape. \textbf{Weibull} is
+the famous flexible one, and it has a single \textbf{``shape knob,'' called $k$}, that is the
+most-tested fact in this whole topic:
+
+\begin{plainbox}[The Weibull shape knob $k$]
+\begin{itemize}[leftmargin=1.2em,topsep=2pt]
+  \item \textbf{$k>1$ --- danger keeps \emph{rising}.} Things wear out (old machines, aging bulbs).
+  \item \textbf{$k=1$ --- danger is \emph{flat}.} Same risk forever, no matter how long it has been
+  (purely random failures). This is the plain ``exponential'' case.
+  \item \textbf{$k<1$ --- danger \emph{falls} over time.} Survive the shaky beginning and you are
+  golden. \textbf{This is classic for customers:} many churn in the first few weeks, but whoever
+  sticks around becomes loyal for the long haul.
+\end{itemize}
+\end{plainbox}
+
+\textbf{Why use Weibull instead of Cox?} Three reasons:
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Predict the future.} Cox cannot say anything past your last observed time; a Weibull
+  curve keeps going, so you can forecast.
+  \item \textbf{Smooth curves} and the ability to \emph{simulate} customer lifetimes.
+  \item \textbf{The shape itself is the insight} (``our churn is $k<1$ $\Rightarrow$ fix onboarding,
+  that is where we bleed people'').
+\end{enumerate}
+
+\begin{mathbox}
+$$S(t)=e^{-(t/\lambda)^k},\qquad h(t)=\frac{k}{\lambda}\Big(\frac{t}{\lambda}\Big)^{k-1}.$$
+$k$ = shape (rising/flat/falling), $\lambda$ = scale (overall ``stretch'' of the timeline).
+The related \textbf{AFT} view writes time directly: a trait's ``time ratio'' $e^{\beta}$ says the
+event happens that many times \emph{sooner} or \emph{later}.
+\end{mathbox}
+
+% =================================================================
+\section{The Machine-Learning Versions}
+% =================================================================
+
+When relationships get complicated (lots of interacting features, no clean assumptions), you bring
+in machine learning --- the \emph{same} model families you already used, just taught to handle
+\emph{time + censoring}.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Random Survival Forest (RSF)} --- a random forest where each tree predicts
+  time-to-event and knows how to handle censored customers. It splits the data to separate
+  ``high-risk soon'' from ``low-risk'' groups as sharply as possible. No proportional-hazards
+  assumption; finds non-linear patterns automatically.
+  \item \textbf{XGBoost AFT} --- gradient boosting (your XGBoost / CatBoost world) that predicts the
+  \emph{actual time until churn} and properly uses ``still active'' rows. You feed each customer a
+  \emph{range} for their event time: for a still-active customer, ``somewhere after today''
+  (lower bound = today, upper bound = infinity).
+\end{itemize}
+
+\begin{plainbox}
+Same machinery you already know from the churn round. The only new trick: these output a
+\textbf{``when''} (a time or a survival curve), not just a yes/no.
+\end{plainbox}
+
+\begin{churnbox}
+You solved churn as a \emph{yes/no at a fixed date} (``any transaction in April?''), which was the
+right call because the target is defined on a fixed window. But underneath, it is a survival problem:
+time-to-next-transaction, censored at the cutoff. If a judge asks \emph{``why not survival
+analysis?''}, the crisp answer is: \emph{``our label is a fixed-time yes/no, so classification
+directly optimises the scored metric. Survival would be the right tool if we needed churn
+\textbf{timing} or a churn-by-any-future-date curve.''}
+\end{churnbox}
+
+% =================================================================
+\section{Grading a Survival Model}
+% =================================================================
+
+\subsection{C-index --- ``does it rank people correctly?''}
+\begin{plainbox}
+The \textbf{C-index} is the survival version of \textbf{AUC}. Take any two customers: did the model
+correctly guess which one churns sooner? The fraction it gets right is the C-index.
+\textbf{0.5 = coin flip, 1.0 = perfect.} It measures \emph{ranking / ordering}.
+\end{plainbox}
+
+\subsection{Brier score --- ``are the probabilities accurate?''}
+\begin{plainbox}
+The \textbf{Brier score} checks whether the actual predicted \emph{probabilities} are right, not just
+the ranking. \textbf{Lower = better.} It catches a model that ranks customers fine but outputs silly
+probability numbers (e.g.\ says ``90\% sure'' and is wrong half the time).
+\end{plainbox}
+
+\begin{tipbox}
+Report \textbf{both}: a model can rank well (good C-index) but be badly calibrated (bad Brier), or
+the reverse. C-index = \emph{discrimination}; Brier = \emph{calibration $+$ discrimination}.
+This contrast is a favourite exam question.
+\end{tipbox}
+
+% =================================================================
+\section{The Two Python Toolboxes}
+% =================================================================
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{\code{lifelines}} --- the friendly one. Best for Kaplan--Meier curves, the Cox model,
+  and clear interpretation/plots.
+  \item \textbf{\code{scikit-survival} (\code{sksurv})} --- sklearn-style. Best for the ML models
+  (RSF) and the scoring metrics (C-index, Brier).
+\end{itemize}
+
+\textbf{The bare-minimum code you should recognise:}
+\begin{lstlisting}[style=py]
+# ---- lifelines: Kaplan-Meier curve ----
+from lifelines import KaplanMeierFitter, CoxPHFitter
+kmf = KaplanMeierFitter()
+kmf.fit(durations=df["time"], event_observed=df["event"])
+kmf.plot_survival_function()       # the staircase
+kmf.median_survival_time_          # the typical lifespan
+
+# ---- lifelines: compare two groups ----
+from lifelines.statistics import logrank_test
+res = logrank_test(a["time"], b["time"], a["event"], b["event"])
+print(res.p_value)                 # small p  ->  groups really differ
+
+# ---- lifelines: Cox model (hazard ratios) ----
+cph = CoxPHFitter().fit(df, duration_col="time", event_col="event")
+cph.print_summary()                # look at exp(coef) = the HR
+cph.check_assumptions(df)          # is the PH assumption ok?
+
+# ---- scikit-survival: Random Survival Forest + scoring ----
+from sksurv.util import Surv
+from sksurv.ensemble import RandomSurvivalForest
+from sksurv.metrics import concordance_index_censored
+y = Surv.from_arrays(event=df["event"].astype(bool), time=df["time"])
+rsf = RandomSurvivalForest(n_estimators=300, n_jobs=-1).fit(X, y)
+risk = rsf.predict(X_test)
+c = concordance_index_censored(y_test["event"], y_test["time"], risk)[0]
+\end{lstlisting}
+
+% =================================================================
+\section{30-Second Recap (read this the morning of)}
+% =================================================================
+\begin{plainbox}
+Watch a bunch of customers. Some churn (you see \emph{when}); some are \textbf{still active when you
+stop watching} (\textbf{censored} --- the whole point of the field). \textbf{Kaplan--Meier} draws the
+survival staircase. \textbf{Log-rank} tests whether two groups' staircases really differ.
+\textbf{Cox} says how each trait \emph{multiplies} churn risk (the \textbf{hazard ratio}).
+\textbf{Weibull} assumes a shape and tells you whether risk \emph{rises, stays flat, or falls} over a
+customer's life (the shape knob $k$). \textbf{RSF / XGBoost-AFT} are the machine-learning versions.
+\textbf{C-index} grades the ranking; \textbf{Brier} grades the probabilities.
+\end{plainbox}
+
+% =================================================================
+\section{One-Page Cheat Sheet}
+% =================================================================
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}p{3.1cm}p{12.3cm}@{}}
+\toprule
+\textbf{Term} & \textbf{What it means in one line} \\
+\midrule
+Event & The thing you are timing (death, failure, churn). \\
+Censoring & ``Still alive when we stopped watching'' --- known partly, not fully. The reason this field exists. \\
+Right-censored & Most common: event has not happened yet at the cutoff. \\
+Left truncation & Subject only enters the study late; you could not have seen earlier failures. \\
+$S(t)$ survival & \% still alive at time $t$ (the scoreboard; only goes down). \\
+$h(t)$ hazard & Risk rate \emph{right now}, for survivors only (the danger meter). \\
+Kaplan--Meier & The downward staircase; steps at churns, censored people leave quietly. \\
+Median survival & Where the staircase crosses 50\% (``typical'' lifespan); may be ``not reached''. \\
+Log-rank test & Do two groups' curves really differ? Gives a yes/no (p-value), not a size. \\
+Cox model & Each trait \emph{multiplies} a shared baseline risk. \\
+Hazard ratio (HR) & The multiplier: $>1$ riskier, $<1$ protective, $=1$ no effect. \\
+PH assumption & Cox assumes the multiplier stays constant over time; check with parallel-curve / Schoenfeld tests. \\
+Weibull shape $k$ & $k>1$ risk rises, $k=1$ flat, $k<1$ risk falls (early churn then loyal). \\
+Parametric vs Cox & Use parametric to forecast the future / get smooth curves / read the shape. \\
+RSF & Random forest for time-to-event; no PH assumption; finds interactions. \\
+XGBoost AFT & Boosting that predicts the actual time; censored rows get a time \emph{range}. \\
+C-index & ``Did it rank who-fails-first correctly?'' = survival AUC (0.5 random, 1.0 perfect). \\
+Brier score & ``Are the predicted probabilities accurate?'' Lower is better. \\
+lifelines & Friendly library: KM, Cox, log-rank, plots. \\
+scikit-survival & sklearn-style: RSF, C-index, Brier. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =================================================================
+\section{Likely Questions (with plain answers)}
+% =================================================================
+\begin{enumerate}[leftmargin=1.6em]
+  \item \emph{Why not just use normal regression?} --- Because of censored people: deleting them
+  biases you, and pretending they churned at the cutoff is a lie. Survival math uses them correctly.
+  \item \emph{Hazard vs probability?} --- Hazard is a \emph{rate} for those still alive right now; it
+  can be bigger than 1 and is not itself a probability.
+  \item \emph{Why doesn't the KM curve drop when someone is censored?} --- They never churned; they
+  just left the pool, lowering the ``at-risk'' count for later steps.
+  \item \emph{What does HR $=0.7$ mean?} --- 30\% \emph{lower} churn rate at every time point
+  (protective) --- assuming the proportional-hazards assumption holds.
+  \item \emph{How do you check that assumption, and what if it fails?} --- Parallel-curve (log--log)
+  plot or Schoenfeld test; fix by stratifying, letting the effect vary with time, or using
+  Weibull / RSF.
+  \item \emph{When is Weibull better than Cox?} --- When you need to forecast beyond your data, want
+  smooth curves, or the rising/flat/falling \emph{shape} is itself the answer.
+  \item \emph{What does $k<1$ tell a business?} --- Risk falls over time: heavy early churn, then
+  survivors stay loyal $\Rightarrow$ invest in onboarding.
+  \item \emph{C-index vs Brier?} --- C-index = ranking (AUC-like); Brier = are the probabilities
+  accurate. Report both.
+  \item \emph{Why did your team use classification, not survival, for churn?} --- The label is a
+  fixed-window yes/no, so classification directly optimises the scored metric; survival would be for
+  predicting churn \emph{timing}.
+\end{enumerate}
+
+\vfill
+\begin{center}\small\itshape
+Compile with \code{pdflatex survival_analysis_guide.tex} (run it twice so the contents page fills in).
+\end{center}
+
+\end{document}
